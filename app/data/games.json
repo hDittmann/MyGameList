@@ -1,7 +1,7 @@
 [
   {
     "id": "1",
-    "title": "Neon Horizon",
+    "title": "Game1",
     "rating": 86,
     "platforms": [
       "PC",
@@ -13,7 +13,7 @@
   },
   {
     "id": "2",
-    "title": "Dungeon Receipt",
+    "title": "Game2",
     "rating": 79,
     "platforms": [
       "PC",
@@ -24,7 +24,7 @@
   },
   {
     "id": "3",
-    "title": "Pastel Kart",
+    "title": "Game3",
     "rating": 91,
     "platforms": [
       "Switch",
