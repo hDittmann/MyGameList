@@ -42,7 +42,7 @@ export default function Home() {
           <div className="flex items-center justify-between gap-4 border-b-2 border-(--border) px-4 py-3">
             <div>
               <h1 className="text-xl" style={{ fontFamily: "var(--font-display)" }}>
-                My Anime List
+                My Game List
               </h1>
               <p className="mt-1 text-xs uppercase tracking-[0.35em] text-(--muted)">
                 Your entries
