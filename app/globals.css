@@ -1,26 +1,90 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #141a29;
+  --foreground: #f5f1ea;
+  --surface: #1c2337;
+  --surface-muted: #232b42;
+  --border: #313a58;
+  --border-strong: #f4c361;
+  --primary: #202842;
+  --primary-dark: #0f1626;
+  --accent: #ff8e6c;
+  --muted: #9ea9c8;
+  --shadow: rgba(0, 0, 0, 0.45);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.06), transparent 50%),
+    radial-gradient(circle at 82% 0%, rgba(255, 255, 255, 0.04), transparent 45%),
+    repeating-linear-gradient(0deg,
+      rgba(255, 255, 255, 0.04),
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px,
+      transparent 28px),
+    linear-gradient(180deg, #0f1626 0%, #141a2a 45%, #1b2336 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), "Space Mono", monospace;
+  letter-spacing: 0.02em;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(244, 195, 97, 0.12) 1px, transparent 1px) repeat;
+  background-size: 72px 100%;
+  z-index: -1;
+}
+
+::selection {
+  background: rgba(244, 195, 97, 0.45);
+  color: #0f1626;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 0;
+}
+
+.panel {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 0.1rem;
+  box-shadow: 0 14px 36px var(--shadow);
+}
+
+.pill {
+  border-radius: 0;
+  border: 2px solid var(--border);
+  padding: 0.25rem 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.58rem;
+  background: var(--surface-muted);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }

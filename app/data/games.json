@@ -1,0 +1,36 @@
+[
+  {
+    "id": "1",
+    "title": "Neon Horizon",
+    "rating": 86,
+    "platforms": [
+      "PC",
+      "PS5",
+      "XSX"
+    ],
+    "releaseDate": "2024-09-12",
+    "status": "Playing"
+  },
+  {
+    "id": "2",
+    "title": "Dungeon Receipt",
+    "rating": 79,
+    "platforms": [
+      "PC",
+      "Switch"
+    ],
+    "releaseDate": "2023-03-04",
+    "status": "Plan to Play"
+  },
+  {
+    "id": "3",
+    "title": "Pastel Kart",
+    "rating": 91,
+    "platforms": [
+      "Switch",
+      "PS5"
+    ],
+    "releaseDate": "2022-11-18",
+    "status": "Completed"
+  }
+]

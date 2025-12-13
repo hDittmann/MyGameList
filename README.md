@@ -1,2 +1,4 @@
 # MyGameList
-Final project for CPRG306, where we make a site called MyGameList (similar to MyAnimeList)
+
+Final project for CPRG306: a site called MyGameList (similar to MyAnimeList).
+
