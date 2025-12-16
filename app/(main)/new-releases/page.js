@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 function formatReleaseDate(seconds) {
   const s = Number(seconds);
-  if (!Number.isFinite(s)) return "—";
+  if (!Number.isFinite(s) || s <= 0) return "TBD";
   const d = new Date(s * 1000);
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
@@ -73,7 +73,7 @@ export default function NewReleases() {
       const ad = Number(a?.first_release_date ?? -1);
       const bd = Number(b?.first_release_date ?? -1);
       if (bd !== ad) return bd - ad;
-      // Tie-breaker: show higher-rated first when release dates match.
+      // shows higher rated games first when release dates are the same
       const ar = Number(getDisplayRating(a) ?? -1);
       const br = Number(getDisplayRating(b) ?? -1);
       return br - ar;
