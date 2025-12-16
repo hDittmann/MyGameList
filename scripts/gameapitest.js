@@ -1,12 +1,9 @@
 /**
- * IGDB API quick test (NO secrets committed).
- *
- * Usage (PowerShell):
- *   $env:TWITCH_CLIENT_ID="..."; $env:TWITCH_CLIENT_SECRET="..."; node .\gameapitest.js
+ * IGDB API quick test for pulling game title data
  *
  * Notes:
- * - IGDB auth uses Twitch client credentials.
- * - Rate limits: 4 req/sec, 8 concurrent.
+ * - IGDB auth uses Twitch client credentials lol
+ * - Rate limits: 4 requests per second, 8 active loading
  */
 
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
@@ -14,13 +11,6 @@ const IGDB_GAMES_URL = "https://api.igdb.com/v4/games";
 
 const clientId = process.env.TWITCH_CLIENT_ID;
 const clientSecret = process.env.TWITCH_CLIENT_SECRET;
-
-if (!clientId || !clientSecret) {
-  console.error(
-    "Missing env vars. Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET before running this script."
-  );
-  process.exit(1);
-}
 
 async function getAccessToken() {
   const params = new URLSearchParams({
@@ -44,14 +34,12 @@ async function getAccessToken() {
 }
 
 async function queryGames(accessToken) {
-  // IGDB query language: https://api-docs.igdb.com/
-  // Keep it small and explicit.
   const body = [
-    'fields name, summary, rating, first_release_date;',
+    "fields name, summary, rating, first_release_date;",
     'search "peak";',
-    'where rating != null;',
-    'sort rating desc;',
-    'limit 5;',
+    "where rating != null;",
+    "sort rating desc;",
+    "limit 5;",
   ].join("\n");
 
   const response = await fetch(IGDB_GAMES_URL, {

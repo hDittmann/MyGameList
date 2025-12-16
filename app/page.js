@@ -1,11 +1,45 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { signOut } from "firebase/auth";
+
+import LoginModal from "./components/LoginModal";
+import LogoutConfirmModal from "./components/LogoutConfirmModal";
+import { useFirebaseUser } from "./hooks/useFirebaseUser";
+import { getFirebaseAuth } from "./lib/firebaseClient";
+
+const EMPTY_GAME_LIST = [];
 
 export default function Home() {
-  const isLoggedIn = false;
+  const { user } = useFirebaseUser();
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const myAnimeList = useMemo(() => [], []);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const myGameList = EMPTY_GAME_LIST;
+
+  const isLoggedIn = Boolean(user);
+
+  async function handleLogout() {
+    try {
+      const auth = getFirebaseAuth();
+      await signOut(auth);
+    } catch (err) {
+      // Keep the UI unchanged but surface the issue for debugging.
+      console.error("Failed to sign out", err);
+    }
+  }
+
+  async function confirmLogout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await handleLogout();
+      setIsLogoutOpen(false);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -20,18 +54,34 @@ export default function Home() {
                 </div>
               </div>
             </div>
-
             <div className="flex items-center gap-3">
               <nav className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-white/80">
-                <span className="border border-white/30 bg-white/5 px-2 py-1">Top Games</span>
-                <span className="border border-white/30 bg-white/5 px-2 py-1">New Releases</span>
+                <span className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white">
+                  Top Games
+                </span>
+                <span className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white">
+                  New Releases
+                </span>
               </nav>
-              <button
-                type="button"
-                className="border-2 border-(--border-strong) bg-(--surface) px-3 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white"
-              >
-                Login
-              </button>
+              {isLoggedIn ? (
+                <button
+                  type="button"
+                  onClick={() => setIsLogoutOpen(true)}
+                  className="cursor-pointer border-2 border-(--border-strong) bg-(--surface) px-3 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition-colors hover:border-white/70 hover:bg-white/10 hover:text-white"
+                >
+                  Logout
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLoginOpen(true);
+                  }}
+                  className="cursor-pointer border-2 border-(--border-strong) bg-(--surface) px-3 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition-colors hover:border-white/70 hover:bg-white/10 hover:text-white"
+                >
+                  Login
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -42,16 +92,16 @@ export default function Home() {
           <div className="flex items-center justify-between gap-4 border-b-2 border-(--border) px-4 py-3">
             <div>
               <h1 className="text-xl" style={{ fontFamily: "var(--font-display)" }}>
-                My Game List
+                MyGameList
               </h1>
-              <p className="mt-1 text-xs uppercase tracking-[0.35em] text-(--muted)">
-                Your entries
+              <p className="mt-1 text-xs tracking-[0.35em] text-(--muted)">
+                COLLECTION
               </p>
             </div>
             <button
               type="button"
               onClick={() => setIsAddOpen(true)}
-              className="border-2 border-(--border) bg-(--surface-muted) px-5 py-3 text-sm uppercase tracking-[0.35em] text-(--muted)"
+              className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-5 py-3 text-sm uppercase tracking-[0.35em] text-(--muted) transition-colors hover:bg-(--surface) hover:text-foreground"
             >
               Add Game
             </button>
@@ -61,86 +111,75 @@ export default function Home() {
             <div className="px-4 py-6 text-sm text-(--muted)">
               Log in to add game data
             </div>
-          ) : myAnimeList.length === 0 ? (
+          ) : myGameList.length === 0 ? (
             <div className="px-4 py-6 text-sm text-(--muted)">No entries yet.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
-                <thead className="bg-(--surface-muted) text-xs uppercase tracking-[0.25em] text-(--muted)">
-                  <tr>
-                    <th className="border-b-2 border-(--border) px-4 py-3 text-left">Title</th>
-                    <th className="border-b-2 border-(--border) px-4 py-3 text-left">Status</th>
-                    <th className="border-b-2 border-(--border) px-4 py-3 text-right">Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myAnimeList.map((item) => (
-                    <tr key={item.id} className="odd:bg-(--surface) even:bg-(--surface-muted)">
-                      <td className="border-b border-(--border) px-4 py-3">
-                        <div className="font-semibold text-foreground">{item.title}</div>
-                      </td>
-                      <td className="border-b border-(--border) px-4 py-3 text-(--muted)">
-                        {item.status ?? "—"}
-                      </td>
-                      <td className="border-b border-(--border) px-4 py-3 text-right">
-                        <span className="inline-block min-w-[2.5rem]">{item.rating ?? "—"}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
               </table>
             </div>
           )}
         </section>
       </div>
 
-      {isAddOpen && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!isAddOpen}
+        className={`fixed inset-0 z-50 grid place-items-center px-4 transition-opacity duration-150 ease-out motion-reduce:transition-none ${isAddOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          } bg-black/60`}
+        onClick={() => {
+          if (!isAddOpen) return;
+          setIsAddOpen(false);
+        }}
+      >
         <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4"
-          onClick={() => setIsAddOpen(false)}
+          className={`w-full max-w-lg border-2 border-(--border) bg-(--surface) transition-all duration-150 ease-out motion-reduce:transition-none ${isAddOpen ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]"
+            }`}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div
-            className="w-full max-w-lg border-2 border-(--border) bg-(--surface)"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b-2 border-(--border) px-4 py-3">
-              <h2 className="text-xl" style={{ fontFamily: "var(--font-display)" }}>
-                Add Game
-              </h2>
-              <button
-                type="button"
-                className="border-2 border-(--border) bg-(--surface-muted) px-2 py-1 text-xs uppercase tracking-[0.35em] text-(--muted)"
-                onClick={() => setIsAddOpen(false)}
-              >
-                Close
-              </button>
-            </div>
+          <div className="flex items-center justify-between border-b-2 border-(--border) px-4 py-3">
+            <h2 className="text-xl" style={{ fontFamily: "var(--font-display)" }}>
+              Add Game
+            </h2>
+            <button
+              type="button"
+              className="border-2 border-(--border) bg-(--surface-muted) px-2 py-1 text-xs uppercase tracking-[0.35em] text-(--muted)"
+              onClick={() => setIsAddOpen(false)}
+            >
+              Close
+            </button>
+          </div>
 
-            <div className="px-4 py-4">
-              <p className="text-sm text-(--muted)">
-                Big box for lots of games lule
-              </p>
+          <div className="px-4 py-4">
+            <p className="text-sm text-(--muted)">Big box for lots of games lule</p>
 
-              <div className="mt-4">
-                <label className="block">
-                  <span className="text-xs uppercase tracking-[0.35em] text-(--muted)">Search</span>
-                  <input
-                    type="search"
-                    placeholder="Search games"
-                    className="mt-2 w-full border-2 border-(--border) bg-(--surface) px-3 py-2 text-sm text-foreground placeholder:text-(--muted)"
-                    disabled
-                  />
-                </label>
-                <div className="mt-3 text-sm text-(--muted)">
-                  {isLoggedIn ? "Search will appear here." : "Log in to add game data"}
-                </div>
+            <div className="mt-4">
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.35em] text-(--muted)">Search</span>
+                <input
+                  type="search"
+                  placeholder="Search games"
+                  className="mt-2 w-full border-2 border-(--border) bg-(--surface) px-3 py-2 text-sm text-foreground placeholder:text-(--muted)"
+                  disabled
+                />
+              </label>
+              <div className="mt-3 text-sm text-(--muted)">
+                {isLoggedIn ? "Search will appear here." : "Log in to add game data"}
               </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      <LoginModal open={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+
+      <LogoutConfirmModal
+        open={isLogoutOpen}
+        busy={isLoggingOut}
+        onCancel={() => setIsLogoutOpen(false)}
+        onConfirm={confirmLogout}
+      />
     </main>
   );
 }
