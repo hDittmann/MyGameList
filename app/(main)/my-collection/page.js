@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useFirebaseUser } from "../hooks/useFirebaseUser";
+import { useFirebaseUser } from "../../hooks/useFirebaseUser";
 
-export default function CollectionHome() {
+export default function MyCollection() {
   const { user } = useFirebaseUser();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const myGameList = [];
@@ -18,9 +18,7 @@ export default function CollectionHome() {
             <h1 className="text-xl" style={{ fontFamily: "var(--font-display)" }}>
               MyGameList
             </h1>
-            <p className="mt-1 text-xs tracking-[0.35em] text-(--muted)">
-              COLLECTION
-            </p>
+            <p className="mt-1 text-xs tracking-[0.35em] text-(--muted)">COLLECTION</p>
           </div>
           <button
             type="button"
@@ -84,7 +82,9 @@ export default function CollectionHome() {
                   disabled
                 />
               </label>
-              <div className="mt-3 text-sm text-(--muted)">{isLoggedIn ? "Search will appear here." : "Log in to add game data"}</div>
+              <div className="mt-3 text-sm text-(--muted)">
+                {isLoggedIn ? "Search will appear here." : "Log in to add game data"}
+              </div>
             </div>
           </div>
         </div>

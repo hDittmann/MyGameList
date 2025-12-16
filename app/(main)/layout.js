@@ -9,7 +9,7 @@ import LogoutConfirmModal from "../components/LogoutConfirmModal";
 import { useFirebaseUser } from "../hooks/useFirebaseUser";
 import { getFirebaseAuth } from "../lib/firebaseClient";
 
-export default function SiteHeader() {
+function SiteHeader() {
   const { user } = useFirebaseUser();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
@@ -51,13 +51,22 @@ export default function SiteHeader() {
           </div>
           <div className="flex items-center gap-3">
             <nav className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-white/80">
-              <Link href="/top-games" className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white">
+              <Link
+                href="/top-games"
+                className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white"
+              >
                 Top Games
               </Link>
-              <Link href="/new-releases" className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white">
+              <Link
+                href="/new-releases"
+                className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white"
+              >
                 New Releases
               </Link>
-              <Link href="/my-collection" className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white">
+              <Link
+                href="/my-collection"
+                className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white"
+              >
                 My Collection
               </Link>
             </nav>
@@ -91,5 +100,14 @@ export default function SiteHeader() {
         onConfirm={confirmLogout}
       />
     </header>
+  );
+}
+
+export default function MainLayout({ children }) {
+  return (
+    <main className="min-h-screen bg-background text-foreground">
+      <SiteHeader />
+      {children}
+    </main>
   );
 }
