@@ -42,8 +42,8 @@ try {
   // If dotenv isn't installed, fall back to relying on the shell environment.
 }
 
-const clientId = process.env.TWITCH_CLIENT_ID;
-const clientSecret = process.env.TWITCH_CLIENT_SECRET;
+const clientId = process.env.TWITCH_CLIENT_ID?.trim();
+const clientSecret = process.env.TWITCH_CLIENT_SECRET?.trim();
 
 function ensureAuthConfigured() {
   if (!clientId || !clientSecret) {
@@ -54,7 +54,7 @@ function ensureAuthConfigured() {
 }
 
 function printHelp() {
-  console.log(`\nIGDB API test runner\n\nUsage:\n  node scripts/gameapitest.js <test> [options]\n\nTests:\n  search      Pull X games for a search term (no sorting)\n  top         Pull top games using weighted(total_rating,total_rating_count) (approx IGDB Top 100)\n  top-simple  Pull top games using ONLY total_rating + total_rating_count\n\nCommon options:\n  --limit <n>             Number of games to fetch (default: 10)\n  --download-covers       Download cover JPGs (default: off)\n  --cover-size <size>     IGDB image size (default: t_cover_big)\n  --min-votes <n>         Minimum vote count (top-simple only; default: 2000)\n\nSearch options:\n  --query <text>          Search string (required for the search test)\n\nExamples:\n  node scripts/gameapitest.js search --query "peak" --limit 10 --download-covers\n  node scripts/gameapitest.js top --download-covers\n  node scripts/gameapitest.js top-simple --limit 25 --min-votes 2000\n`);
+  console.log(`\nIGDB API test runner\n\nUsage:\n  node scripts/gameapitest.js <test> [options]\n\nTests:\n  id          Pull a single game by IGDB id\n  search      Pull X games for a search term (no sorting)\n  top         Pull top games using weighted(total_rating,total_rating_count) (approx IGDB Top 100)\n  top-simple  Pull top games using ONLY total_rating + total_rating_count\n\nCommon options:\n  --limit <n>             Number of games to fetch (default: 10)\n  --download-covers       Download cover JPGs (default: off)\n  --cover-size <size>     IGDB image size (default: t_cover_big)\n  --min-votes <n>         Minimum vote count (top-simple only; default: 2000)\n\nID options:\n  --id <n>                IGDB numeric id (required for the id test)\n\nSearch options:\n  --query <text>          Search string (required for the search test)\n\nExamples:\n  node scripts/gameapitest.js id --id 253344 --download-covers\n  node scripts/gameapitest.js search --query "peak" --limit 10 --download-covers\n  node scripts/gameapitest.js top --download-covers\n  node scripts/gameapitest.js top-simple --limit 25 --min-votes 2000\n`);
 }
 
 function getArgValue(args, name) {
@@ -314,6 +314,49 @@ async function runSearchTest(accessToken, args) {
 }
 
 /**
+ * TEST 0: ID lookup
+ * - Fetch a single record by IGDB `id`.
+ */
+async function runIdTest(accessToken, args) {
+  const common = parseCommonOptions(args);
+  const idRaw = getArgValue(args, "--id");
+  const id = idRaw ? Number.parseInt(idRaw, 10) : NaN;
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("ID test requires --id <positive_number>");
+  }
+
+  const fieldsLine =
+    "fields id, name, summary, rating, rating_count, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, first_release_date, category, version_parent, parent_game, cover.image_id;";
+
+  const queryLines = [fieldsLine, `where id = ${id};`, "limit 1;"];
+
+  console.log(`Running TEST 0 (id): id=${id}`);
+  const rawGames = await igdbQuery(accessToken, queryLines);
+  const games = normalizeGames(rawGames ?? [], { coverSize: common.coverSize });
+
+  let downloadResult;
+  if (common.downloadCovers && games.length > 0) {
+    console.log("Downloading cover images...");
+    downloadResult = await downloadCoverImages(games, {
+      outputDir: path.join(__dirname, "output", "igdb", "by-id"),
+      coverSize: common.coverSize,
+    });
+    const okCount = downloadResult.results.filter((r) => r.ok).length;
+    console.log(`Downloaded ${okCount}/${games.length} cover(s).`);
+  }
+
+  const out = await writeTestOutput({
+    testName: "by-id",
+    query: { type: "id", id, ...common },
+    games,
+    downloadResult,
+  });
+
+  console.log(`Wrote JSON: ${out.outputFile}`);
+  return games;
+}
+
+/**
  * TEST 2: Top-rated test
  * - Prefers total_rating (critic+user) with count thresholds to reduce "99 from 1 vote" skew.
  */
@@ -561,7 +604,9 @@ async function main() {
   console.log("Token acquired.");
 
   let games;
-  if (command === "search") {
+  if (command === "id") {
+    games = await runIdTest(token, args);
+  } else if (command === "search") {
     games = await runSearchTest(token, args);
   } else if (command === "top") {
     games = await runTopRatedTest(token, args);
