@@ -32,13 +32,6 @@ let persistencePromise;
 export function getFirebaseApp() {
   if (cachedApp) return cachedApp;
 
-  const config = getFirebaseConfig();
-  if (!hasFirebaseConfig(config)) {
-    throw new Error(
-      "Firebase is not configured. Set NEXT_PUBLIC_FIREBASE_* env vars in .env.local."
-    );
-  }
-
   cachedApp = getApps()[0] ?? initializeApp(config);
   return cachedApp;
 }

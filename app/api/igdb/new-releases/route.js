@@ -1,0 +1,24 @@
+import { NextResponse } from "next/server";
+import { fetchIgdbGames } from "../../../lib/igdbServer";
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const q = searchParams.get("q");
+  const page = searchParams.get("page") ?? "1";
+  const pageSize = searchParams.get("pageSize") ?? "20";
+
+  try {
+    const payload = await fetchIgdbGames({
+      mode: "new-releases",
+      q,
+      page: Number(page),
+      pageSize: Number(pageSize),
+    });
+    return NextResponse.json(payload);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error?.message ?? "Failed to fetch IGDB new releases" },
+      { status: 500 }
+    );
+  }
+}
