@@ -13,8 +13,6 @@ let cachedToken = null;
 let cachedTokenExpiresAt = 0;
 
 async function getAccessToken() {
-  ensureAuthConfigured();
-
   const now = Date.now();
   if (cachedToken && cachedTokenExpiresAt - now > 60_000) {
     return cachedToken;
@@ -43,8 +41,6 @@ async function getAccessToken() {
 }
 
 async function igdbQuery(accessToken, queryLines) {
-  ensureAuthConfigured();
-
   const body = queryLines.join("\n");
   const response = await fetch(IGDB_GAMES_URL, {
     method: "POST",
@@ -69,8 +65,6 @@ function getIgdbImageUrl(imageId, size) {
 }
 
 function isMainGameRecord(game) {
-  // Keep the pagination stable: rely on IGDB query filters for versions/DLC.
-  // We only re-check version/parent fields here.
   return game?.version_parent == null && game?.parent_game == null;
 }
 
@@ -187,7 +181,7 @@ export async function fetchIgdbGames({ mode, q, page = 1, pageSize = DEFAULT_PAG
       // For New Releases search: only show already-released games (no upcoming).
       mainGames = mainGames.filter((g) => {
         const d = Number(g?.first_release_date);
-        return Number.isFinite(d) && d <= nowSeconds;
+        return Number.isFinite(d) && d > 0 && d <= nowSeconds;
       });
       mainGames.sort((a, b) => Number(b?.first_release_date ?? -1) - Number(a?.first_release_date ?? -1));
     } else if (mode === "top-games") {

@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-
 import { useEffect, useMemo, useState } from "react";
 
 function getDisplayRating(game) {
@@ -20,7 +18,7 @@ function formatRating(value) {
 
 function formatReleaseDate(seconds) {
   const s = Number(seconds);
-  if (!Number.isFinite(s)) return "—";
+  if (!Number.isFinite(s) || s <= 0) return "TBD";
   const d = new Date(s * 1000);
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
@@ -171,6 +169,7 @@ export default function TopGames() {
                 <div className="grid grid-cols-[7.5rem_1fr] gap-4 p-4">
                   <div className="h-40 w-30 overflow-hidden border-2 border-(--border) bg-(--surface-muted)">
                     {g.coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={g.coverUrl} alt="" className="h-full w-full object-cover" />
                     ) : null}
                   </div>
