@@ -13,7 +13,6 @@ let cachedToken = null;
 let cachedTokenExpiresAt = 0;
 
 async function getAccessToken() {
-  ensureAuthConfigured();
 
   const now = Date.now();
   if (cachedToken && cachedTokenExpiresAt - now > 60_000) {
@@ -43,7 +42,6 @@ async function getAccessToken() {
 }
 
 async function igdbQuery(accessToken, queryLines) {
-  ensureAuthConfigured();
 
   const body = queryLines.join("\n");
   const response = await fetch(IGDB_GAMES_URL, {
