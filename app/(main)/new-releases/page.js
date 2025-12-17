@@ -247,13 +247,10 @@ export default function NewReleases() {
       <section className="border-2 border-(--border) bg-(--surface)">
         <div className="border-b-2 border-(--border) px-4 py-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-xl" style={{ fontFamily: "var(--font-display)" }}>
+            <div style={{ width: '87.52px', height: '56px' }}>
+              <h1 className="text-xl" style={{ fontFamily: "var(--font-display)", lineHeight: '30px' }}>
                 NEW RELEASES
               </h1>
-              <p className="mt-1 text-xs tracking-[0.35em] text-(--muted)">
-                {activeQuery ? `SEARCH: ${activeQuery}` : ""}
-              </p>
             </div>
 
             <form
@@ -334,6 +331,12 @@ export default function NewReleases() {
 
         <div className="flex items-center justify-between gap-3 border-b border-(--border) px-4 py-3">
           <div className="text-xs uppercase tracking-[0.35em] text-(--muted)">Page {page}</div>
+
+          <div>
+            {activeQuery ? (
+              <span className="ml-3 text-xs tracking-[0.15em] text-(--muted)">SEARCH: {activeQuery}</span>
+            ) : null}
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
