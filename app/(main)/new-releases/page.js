@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useFirebaseUser } from "../../hooks/useFirebaseUser";
+import { getFirebaseDb } from "../../lib/firebaseClient";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 function formatReleaseDate(seconds) {
   const s = Number(seconds);
@@ -37,6 +41,73 @@ export default function NewReleases() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
+  const { user } = useFirebaseUser();
+  const router = useRouter();
+
+  const handleAdd = useCallback(
+    async (game) => {
+      if (!user) {
+        alert("Please sign in to add games to your collection.");
+        router.push("/my-collection");
+        return;
+      }
+
+      try {
+        console.log("handleAdd - current user:", user);
+        if (user && !user.uid) {
+          alert("Logged in user found but missing uid — check auth state in console.");
+        }
+        const db = getFirebaseDb();
+        const ref = doc(db, "users", user.uid, "games", String(game.id));
+        await setDoc(ref, {
+          id: game.id,
+          title: game.name ?? game.title ?? "",
+          addedAt: serverTimestamp(),
+        });
+        try {
+          window.dispatchEvent(new CustomEvent("collection:changed"));
+        } catch { }
+        alert(`${game.name ?? game.title} added to your collection.`);
+      } catch (err) {
+        console.error("Failed to add game:", err);
+        // REST fallback
+        try {
+          const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+          const docId = String(game.id);
+          const idToken = await user.getIdToken();
+          const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${user.uid}/games?documentId=${docId}`;
+          const body = {
+            fields: {
+              id: { integerValue: String(game.id) },
+              title: { stringValue: String(game.name ?? game.title ?? "") },
+              addedAt: { timestampValue: new Date().toISOString() },
+            },
+          };
+
+          const res = await fetch(url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          });
+
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`REST write failed: ${res.status} ${text}`);
+          }
+
+          try { window.dispatchEvent(new CustomEvent("collection:changed")); } catch { }
+          alert(`${game.name ?? game.title} added to your collection.`);
+        } catch (restErr) {
+          console.error("REST fallback failed:", restErr);
+          alert(`Failed to add game: ${err?.message ?? String(err)} (see console)`);
+        }
+      }
+    },
+    [user, router]
+  );
 
   async function load({ q, nextPage }) {
     setLoading(true);
@@ -209,6 +280,15 @@ export default function NewReleases() {
                     ) : (
                       <p className="mt-3 text-xs text-(--muted)">No description.</p>
                     )}
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => handleAdd(g)}
+                        className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-1 text-xs uppercase tracking-[0.35em] text-(--muted)"
+                      >
+                        Add to Collection
+                      </button>
+                    </div>
                   </div>
                 </div>
               </article>
