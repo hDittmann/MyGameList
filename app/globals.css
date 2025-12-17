@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+html {
+  scrollbar-gutter: stable;
+}
+
 :root {
   --background: #141a29;
   --foreground: #f5f1ea;
@@ -12,6 +16,20 @@
   --accent: #ff8e6c;
   --muted: #9ea9c8;
   --shadow: rgba(0, 0, 0, 0.45);
+}
+
+html[data-theme="light"] {
+  --background: #f5f1ea;
+  --foreground: #141a29;
+  --surface: #f5f1ea;
+  --surface-muted: #9ea9c8;
+  --border: #313a58;
+  --border-strong: #202842;
+  --primary: #9ea9c8;
+  --primary-dark: #f5f1ea;
+  --accent: #202842;
+  --muted: #202842;
+  --shadow: rgba(0, 0, 0, 0.18);
 }
 
 @theme inline {
@@ -35,6 +53,15 @@ body {
   color: var(--foreground);
   font-family: var(--font-body), "Space Mono", monospace;
   letter-spacing: 0.02em;
+}
+
+html[data-theme="light"] body {
+  background: var(--background);
+}
+
+html[data-font="readable"] body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  letter-spacing: 0.01em;
 }
 
 body::before {

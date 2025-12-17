@@ -1,41 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { signOut } from "firebase/auth";
+import { usePathname, useRouter } from "next/navigation";
 
 import LoginModal from "../components/LoginModal";
-import LogoutConfirmModal from "../components/LogoutConfirmModal";
 import { useFirebaseUser } from "../hooks/useFirebaseUser";
-import { getFirebaseAuth } from "../lib/firebaseClient";
+import { useUserSettings } from "../hooks/useUserSettings";
 
 function SiteHeader() {
   const { user } = useFirebaseUser();
+  const { username } = useUserSettings(user);
+  const pathname = usePathname();
+  const router = useRouter();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isLoggedIn = Boolean(user);
 
-  async function handleLogout() {
-    try {
-      const auth = getFirebaseAuth();
-      await signOut(auth);
-    } catch (err) {
-      console.error("Failed to sign out", err);
-    }
+  function navClass(href) {
+    const isActive = pathname === href;
+    return `cursor-pointer border px-2 py-1 transition-colors ${isActive
+      ? "border-white/70 bg-white/15 text-white"
+      : "border-white/30 bg-white/5 hover:border-white/60 hover:bg-white/10 hover:text-white"
+      }`;
   }
 
-  async function confirmLogout() {
-    if (isLoggingOut) return;
-    setIsLoggingOut(true);
-    try {
-      await handleLogout();
-      setIsLogoutOpen(false);
-    } finally {
-      setIsLoggingOut(false);
-    }
-  }
+  const displayName = (typeof username === "string" && username.trim())
+    ? username.trim()
+    : (user?.email ?? "Account");
 
   return (
     <header className="border-b-2 border-(--border) bg-(--primary)">
@@ -53,31 +45,42 @@ function SiteHeader() {
             <nav className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-white/80">
               <Link
                 href="/top-games"
-                className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white"
+                className={navClass("/top-games")}
               >
                 Top Games
               </Link>
               <Link
                 href="/new-releases"
-                className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white"
+                className={navClass("/new-releases")}
               >
                 New Releases
               </Link>
               <Link
                 href="/my-collection"
-                className="cursor-pointer border border-white/30 bg-white/5 px-2 py-1 transition-colors hover:border-white/60 hover:bg-white/10 hover:text-white"
+                className={navClass("/my-collection")}
               >
                 My Collection
               </Link>
             </nav>
             {isLoggedIn ? (
-              <button
-                type="button"
-                onClick={() => setIsLogoutOpen(true)}
-                className="cursor-pointer border-2 border-(--border-strong) bg-(--surface) px-3 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition-colors hover:border-white/70 hover:bg-white/10 hover:text-white"
-              >
-                Logout
-              </button>
+              <div className="flex items-center gap-2">
+                <div
+                  className="max-w-[16rem] truncate text-xs font-semibold uppercase tracking-[0.35em] text-white"
+                  title={displayName}
+                >
+                  {displayName}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push("/settings")}
+                  className={`grid h-9 w-10 place-items-center cursor-pointer border-2 border-(--border-strong) text-xs font-semibold uppercase tracking-[0.35em] text-white transition-colors hover:border-white/70 hover:bg-white/10 hover:text-white ${pathname === "/settings" ? "bg-white/10" : "bg-(--surface)"
+                    }`}
+                  aria-label="Settings"
+                  title="Settings"
+                >
+                  ⚙
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
@@ -92,18 +95,21 @@ function SiteHeader() {
       </div>
 
       <LoginModal open={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
-
-      <LogoutConfirmModal
-        open={isLogoutOpen}
-        busy={isLoggingOut}
-        onCancel={() => setIsLogoutOpen(false)}
-        onConfirm={confirmLogout}
-      />
     </header>
   );
 }
 
 export default function MainLayout({ children }) {
+  const { user } = useFirebaseUser();
+  const { settings } = useUserSettings(user);
+
+  useEffect(() => {
+    const theme = settings?.theme === "light" ? "light" : "dark";
+    const font = settings?.font === "readable" ? "readable" : "default";
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.font = font;
+  }, [settings?.theme, settings?.font]);
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <SiteHeader />
@@ -111,3 +117,4 @@ export default function MainLayout({ children }) {
     </main>
   );
 }
+

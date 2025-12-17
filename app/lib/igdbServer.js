@@ -1,5 +1,7 @@
 import "server-only";
 
+import { isMatureGame } from "./matureFilter";
+
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const IGDB_GAMES_URL = "https://api.igdb.com/v4/games";
 
@@ -101,9 +103,38 @@ function computeWeightedRating({ averageRating, voteCount, globalAverage, minVot
   return (v / (v + m)) * R + (m / (v + m)) * C;
 }
 
+function normalizeNameList(items) {
+  const names = [];
+  const seen = new Set();
+  for (const it of items ?? []) {
+    const name = typeof it?.name === "string" ? it.name.trim() : "";
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
 function normalizeGames(games, { coverSize }) {
   return (games ?? []).map((g) => {
     const imageId = g?.cover?.image_id;
+
+    const tagsByType = {
+      genres: normalizeNameList(g?.genres),
+      themes: normalizeNameList(g?.themes),
+      modes: normalizeNameList(g?.game_modes),
+      perspectives: normalizeNameList(g?.player_perspectives),
+    };
+
+    const tags = [
+      ...tagsByType.genres,
+      ...tagsByType.themes,
+      ...tagsByType.modes,
+      ...tagsByType.perspectives,
+    ];
+
     return {
       id: g?.id ?? null,
       name: g?.name ?? "",
@@ -120,7 +151,42 @@ function normalizeGames(games, { coverSize }) {
       coverImageId: imageId ?? null,
       coverUrl: imageId ? getIgdbImageUrl(imageId, coverSize) : null,
       category: g?.category ?? null,
+      tags,
+      tagsByType,
     };
+  });
+}
+
+function getDisplayRating(game) {
+  return game?.weighted_rating ?? game?.total_rating ?? game?.aggregated_rating ?? game?.rating ?? null;
+}
+
+function normalizeTagFilters(tags) {
+  return (tags ?? [])
+    .map((t) => String(t ?? "").trim())
+    .filter(Boolean);
+}
+
+function applyFilters(games, { minRating = 0, tagFilters = [], hideMature = true }) {
+  const safeMinRating = Number(minRating) || 0;
+  const wanted = normalizeTagFilters(tagFilters).map((t) => t.toLowerCase());
+
+  return (games ?? []).filter((g) => {
+    if (hideMature && isMatureGame(g)) return false;
+
+    if (safeMinRating > 0) {
+      const r = Number(getDisplayRating(g) ?? -1);
+      if (!Number.isFinite(r) || r < safeMinRating) return false;
+    }
+
+    if (wanted.length) {
+      const haystack = (Array.isArray(g?.tags) ? g.tags : []).map((t) => String(t).toLowerCase());
+      // Require every filter term to match at least one tag.
+      const ok = wanted.every((w) => haystack.some((tag) => tag.includes(w)));
+      if (!ok) return false;
+    }
+
+    return true;
   });
 }
 
@@ -130,12 +196,26 @@ function getCacheKey({ mode, q, coverSize }) {
   return JSON.stringify({ mode, q: q ?? "", coverSize });
 }
 
-export async function fetchIgdbGames({ mode, q, page = 1, pageSize = DEFAULT_PAGE_SIZE, coverSize = "t_cover_big" }) {
+export async function fetchIgdbGames({
+  mode,
+  q,
+  page = 1,
+  pageSize = DEFAULT_PAGE_SIZE,
+  coverSize = "t_cover_big",
+  minRating = 0,
+  tagFilters = [],
+  hideMature = true,
+}) {
   const safePageSize = Math.max(1, Math.min(Number(pageSize) || DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE));
   const safePage = Math.max(1, Number(page) || 1);
   const queryText = typeof q === "string" ? q.trim() : "";
 
-  const cacheKey = getCacheKey({ mode, q: queryText, coverSize });
+  const cacheKey = JSON.stringify({
+    ...JSON.parse(getCacheKey({ mode, q: queryText, coverSize })),
+    minRating: Number(minRating) || 0,
+    tagFilters: normalizeTagFilters(tagFilters),
+    hideMature: Boolean(hideMature),
+  });
   const existing = cachedResults.get(cacheKey);
   if (existing && Date.now() - existing.cachedAt < 5 * 60_000) {
     const all = existing.payload?.gamesAll ?? [];
@@ -157,7 +237,7 @@ export async function fetchIgdbGames({ mode, q, page = 1, pageSize = DEFAULT_PAG
   const accessToken = await getAccessToken();
 
   const fieldsLine =
-    "fields id, name, summary, rating, rating_count, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, first_release_date, category, version_parent, parent_game, cover.image_id;";
+    "fields id, name, summary, rating, rating_count, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, first_release_date, category, version_parent, parent_game, cover.image_id, genres.name, themes.name, game_modes.name, player_perspectives.name;";
   const baseWhere = "version_parent = null & parent_game = null";
 
   let payload;
@@ -208,11 +288,13 @@ export async function fetchIgdbGames({ mode, q, page = 1, pageSize = DEFAULT_PAG
       unique.push(g);
     }
 
+    const filtered = applyFilters(unique, { minRating, tagFilters, hideMature });
+
     payload = {
       fetchedAt: new Date().toISOString(),
       mode,
       q: queryText,
-      gamesAll: unique,
+      gamesAll: filtered,
     };
   } else if (mode === "top-games") {
     // "Top games" should consider both rating and vote count.
@@ -289,23 +371,24 @@ export async function fetchIgdbGames({ mode, q, page = 1, pageSize = DEFAULT_PAG
       unique.push(g);
     }
 
+    const filtered = applyFilters(unique, { minRating, tagFilters, hideMature });
+
     payload = {
       fetchedAt: new Date().toISOString(),
       mode,
       q: null,
-      gamesAll: unique,
+      gamesAll: filtered,
     };
   } else if (mode === "new-releases") {
-    // Show releases from now backwards (no upcoming). Paginate with offset.
+    // New releases candidate pool, then filter/paginate server-side.
     const nowSeconds = Math.floor(Date.now() / 1000);
-    const offset = startIndex;
+    const candidateLimit = IGDB_MAX_LIMIT_PER_REQUEST;
 
     const queryLines = [
       fieldsLine,
       `where first_release_date != null & first_release_date <= ${nowSeconds} & ${baseWhere};`,
       "sort first_release_date desc;",
-      `offset ${offset};`,
-      `limit ${safePageSize};`,
+      `limit ${candidateLimit};`,
     ];
 
     const raw = await igdbQuery(accessToken, queryLines);
@@ -321,17 +404,13 @@ export async function fetchIgdbGames({ mode, q, page = 1, pageSize = DEFAULT_PAG
       unique.push(g);
     }
 
-    // For offset-paginated endpoints, we only cache this page response.
-    return {
+    const filtered = applyFilters(unique, { minRating, tagFilters, hideMature });
+
+    payload = {
       fetchedAt: new Date().toISOString(),
       mode,
       q: null,
-      page: safePage,
-      pageSize: safePageSize,
-      total: null,
-      count: unique.length,
-      hasMore: unique.length === safePageSize,
-      games: unique,
+      gamesAll: filtered,
     };
   } else {
     throw new Error(`Unsupported mode: ${mode}`);

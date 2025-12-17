@@ -144,6 +144,17 @@ export default function LoginModal({ open, onClose }) {
         updatedAt: serverTimestamp(),
         ...(isNewUser ? { createdAt: serverTimestamp() } : {}),
         lastLoginAt: serverTimestamp(),
+        ...(isNewUser
+          ? {
+            settings: {
+              hideMature: true,
+              minRating: 0,
+              tagFilters: [],
+              theme: "dark",
+              font: "default",
+            },
+          }
+          : {}),
       },
       { merge: true }
     );
