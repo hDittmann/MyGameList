@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchIgdbGames } from "../../../lib/igdbServer";
 
 export async function GET(request) {
+  // keep request parsing here and the heavy lifting in igdbServer
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q");
   const page = searchParams.get("page") ?? "1";
@@ -21,6 +22,7 @@ export async function GET(request) {
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean),
+      // default to hiding mature content unless explicitly disabled
       hideMature: hideMature == null ? true : hideMature !== "0",
     });
     return NextResponse.json(payload);

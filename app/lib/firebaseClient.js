@@ -26,6 +26,7 @@ export function isFirebaseConfigured() {
 }
 
 let cachedApp;
+let cachedDb;
 let cachedAuth;
 let persistencePromise;
 
@@ -39,12 +40,17 @@ export function getFirebaseApp() {
     );
   }
 
+  // keep a single firebase app instance around (next dev can re-run module init a bunch)
   cachedApp = getApps()[0] ?? initializeApp(config);
   return cachedApp;
 }
 
 export function getFirebaseDb() {
-  return getFirestore(getFirebaseApp());
+  if (cachedDb) return cachedDb;
+
+  // firestore instance is tied to the singleton app above
+  cachedDb = getFirestore(getFirebaseApp());
+  return cachedDb;
 }
 
 export function getFirebaseAuth() {
@@ -52,6 +58,7 @@ export function getFirebaseAuth() {
 
   cachedAuth = getAuth(getFirebaseApp());
 
+  // set auth persistence once; if it fails we just fall back to default behavior
   persistencePromise ??= setPersistence(cachedAuth, browserLocalPersistence).catch(() => { });
 
   return cachedAuth;

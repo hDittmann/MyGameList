@@ -75,8 +75,8 @@ export default function ConfirmModal({
               onClick={confirm}
               disabled={busy}
               className={`cursor-pointer border-2 px-3 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${danger
-                  ? "border-(--border) bg-red-600 text-white"
-                  : "border-(--border-strong) bg-(--surface) text-white hover:border-white/70 hover:bg-white/10 hover:text-white"
+                ? "border-(--border) bg-red-600 text-white"
+                : "border-(--border-strong) bg-(--surface-muted) text-foreground hover:bg-(--surface)"
                 }`}
             >
               {confirmText}

@@ -39,10 +39,10 @@ function getFriendlyAuthError(err) {
   }
 }
 
-// Proper RFC 5322 email validation (close to standard, not 100% but very solid)
+// pretty decent email validation (not perfect, but good enough for ui feedback)
 function validateEmail(value) {
   const email = String(value).trim();
-  // RFC 5322-ish pattern (simplified but solid)
+  // rfc 5322-ish pattern (simplified but solid)
   const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return pattern.test(email);
 }
@@ -197,11 +197,11 @@ export default function LoginModal({ open, onClose }) {
       const auth = getFirebaseAuth();
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
 
-      // Send verification email to the new user
+      // send verification email to the new user
       try {
         await sendEmailVerification(cred.user);
         setVerificationSent(true);
-        setError(""); // Clear any previous errors
+        setError(""); // clear any previous errors
       } catch (emailErr) {
         console.error("Failed to send verification email:", emailErr);
         setError("Account created, but we couldn't send the verification email. Try refreshing.");
@@ -210,16 +210,16 @@ export default function LoginModal({ open, onClose }) {
       await upsertUserDoc(cred.user, { isNewUser: true });
       setPassword("");
 
-      // Sign out the newly-created user so they can't use the app
-      // before verifying their email (Firebase auto-signs-in on create).
+      // sign out the newly-created user so they can't use the app
+      // before verifying their email (firebase auto-signs-in on create).
       try {
         await auth.signOut();
       } catch (signOutErr) {
         console.error("Failed to sign out after account creation:", signOutErr);
       }
 
-      // Don't close yet—show verification message
-      // close(); // Removed so user sees the success message
+      // don't close yet—show verification message
+      // close(); // removed so user sees the success message
     } catch (err) {
       setError(getFriendlyAuthError(err));
     } finally {
@@ -245,10 +245,10 @@ export default function LoginModal({ open, onClose }) {
       const auth = getFirebaseAuth();
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
 
-      // ✨ Check if email is verified
+      // check if email is verified
       if (!cred.user.emailVerified) {
         setError("Please verify your email before signing in. Check your inbox for a verification link.");
-        auth.signOut(); // Sign them out
+        auth.signOut(); // sign them out
         setBusy(false);
         return;
       }
@@ -350,7 +350,7 @@ export default function LoginModal({ open, onClose }) {
                     type="button"
                     onClick={handleSignIn}
                     disabled={busy || Boolean(getFormIssue())}
-                    className="cursor-pointer border-2 border-(--border-strong) bg-(--surface) px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition-colors hover:border-white/70 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    className="cursor-pointer border-2 border-(--border-strong) bg-(--surface-muted) px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-foreground transition-colors hover:bg-(--surface) disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {busy ? "Working..." : "Sign In"}
                   </button>

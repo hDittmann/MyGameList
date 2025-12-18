@@ -11,10 +11,20 @@ const clientSecret = process.env.TWITCH_CLIENT_SECRET;
 const IGDB_MAX_LIMIT_PER_REQUEST = 500;
 const DEFAULT_PAGE_SIZE = 20;
 
+// small in-memory cache so we don't hammer igdb/twitch during browsing
+// (this is per-server-instance, so it resets on restart)
+const CACHE_TTL_MS = 5 * 60_000;
+const CACHE_MAX_ENTRIES = 120;
+
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
 
 async function getAccessToken() {
+
+  // don't even try if env isn't set, this error is way nicer than whatever twitch returns
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET server env vars");
+  }
 
   const now = Date.now();
   if (cachedToken && cachedTokenExpiresAt - now > 60_000) {
@@ -33,7 +43,7 @@ async function getAccessToken() {
     body: params,
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(`Token request failed: ${JSON.stringify(data)}`);
   }
@@ -44,7 +54,7 @@ async function getAccessToken() {
 }
 
 async function igdbQuery(accessToken, queryLines) {
-
+  // this is the only place we hit igdb directly
   const body = queryLines.join("\n");
   const response = await fetch(IGDB_GAMES_URL, {
     method: "POST",
@@ -56,12 +66,12 @@ async function igdbQuery(accessToken, queryLines) {
     body,
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(`IGDB query failed: ${JSON.stringify(data)}`);
   }
 
-  return data;
+  return data ?? [];
 }
 
 function getIgdbImageUrl(imageId, size) {
@@ -90,7 +100,7 @@ function mean(numbers) {
 }
 
 function computeWeightedRating({ averageRating, voteCount, globalAverage, minVotes }) {
-  // Bayesian-weighted score: (v/(v+m))*R + (m/(v+m))*C
+  // bayesian-ish score: (v/(v+m))*R + (m/(v+m))*C
   const R = Number(averageRating);
   const v = Number(voteCount);
   const C = Number(globalAverage);
@@ -117,9 +127,23 @@ function normalizeNameList(items) {
   return names;
 }
 
+function getSteamUrlFromWebsites(websites) {
+  // igdb website categories: steam is commonly category 13.
+  // we keep this resilient by also matching common steam hostnames.
+  for (const w of websites ?? []) {
+    const url = typeof w?.url === "string" ? w.url.trim() : "";
+    if (!url) continue;
+    const cat = Number(w?.category);
+    if (cat === 13) return url;
+    if (/store\.steampowered\.com/i.test(url)) return url;
+  }
+  return null;
+}
+
 function normalizeGames(games, { coverSize }) {
   return (games ?? []).map((g) => {
     const imageId = g?.cover?.image_id;
+    const steamUrl = getSteamUrlFromWebsites(g?.websites);
 
     const tagsByType = {
       genres: normalizeNameList(g?.genres),
@@ -151,6 +175,7 @@ function normalizeGames(games, { coverSize }) {
       coverImageId: imageId ?? null,
       coverUrl: imageId ? getIgdbImageUrl(imageId, coverSize) : null,
       category: g?.category ?? null,
+      steamUrl,
       tags,
       tagsByType,
     };
@@ -181,7 +206,7 @@ function applyFilters(games, { minRating = 0, tagFilters = [], hideMature = true
 
     if (wanted.length) {
       const haystack = (Array.isArray(g?.tags) ? g.tags : []).map((t) => String(t).toLowerCase());
-      // Require every filter term to match at least one tag.
+      // require every filter term to match at least one tag
       const ok = wanted.every((w) => haystack.some((tag) => tag.includes(w)));
       if (!ok) return false;
     }
@@ -192,8 +217,18 @@ function applyFilters(games, { minRating = 0, tagFilters = [], hideMature = true
 
 let cachedResults = new Map();
 
-function getCacheKey({ mode, q, coverSize }) {
-  return JSON.stringify({ mode, q: q ?? "", coverSize });
+function pruneResultsCache(now = Date.now()) {
+  // drop expired entries first
+  for (const [key, entry] of cachedResults) {
+    if (!entry || now - entry.cachedAt > CACHE_TTL_MS) cachedResults.delete(key);
+  }
+
+  // then enforce a simple max size (oldest entries get evicted)
+  while (cachedResults.size > CACHE_MAX_ENTRIES) {
+    const oldestKey = cachedResults.keys().next().value;
+    if (oldestKey == null) break;
+    cachedResults.delete(oldestKey);
+  }
 }
 
 export async function fetchIgdbGames({
@@ -211,13 +246,23 @@ export async function fetchIgdbGames({
   const queryText = typeof q === "string" ? q.trim() : "";
 
   const cacheKey = JSON.stringify({
-    ...JSON.parse(getCacheKey({ mode, q: queryText, coverSize })),
+    mode,
+    q: queryText,
+    coverSize,
     minRating: Number(minRating) || 0,
     tagFilters: normalizeTagFilters(tagFilters),
     hideMature: Boolean(hideMature),
   });
+
+  const now = Date.now();
+  pruneResultsCache(now);
+
   const existing = cachedResults.get(cacheKey);
-  if (existing && Date.now() - existing.cachedAt < 5 * 60_000) {
+  if (existing && now - existing.cachedAt < CACHE_TTL_MS) {
+    // bump this entry so it doesn't get evicted as quickly
+    cachedResults.delete(cacheKey);
+    cachedResults.set(cacheKey, existing);
+
     const all = existing.payload?.gamesAll ?? [];
     const start = (safePage - 1) * safePageSize;
     const pageGames = all.slice(start, start + safePageSize);
@@ -237,14 +282,14 @@ export async function fetchIgdbGames({
   const accessToken = await getAccessToken();
 
   const fieldsLine =
-    "fields id, name, summary, rating, rating_count, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, first_release_date, category, version_parent, parent_game, cover.image_id, genres.name, themes.name, game_modes.name, player_perspectives.name;";
+    "fields id, name, summary, rating, rating_count, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, first_release_date, category, version_parent, parent_game, cover.image_id, websites.category, websites.url, genres.name, themes.name, game_modes.name, player_perspectives.name;";
   const baseWhere = "version_parent = null & parent_game = null";
 
   let payload;
   const startIndex = (safePage - 1) * safePageSize;
 
   if (queryText) {
-    // IGDB disallows combining search+sort; we'll sort server-side then paginate.
+    // igdb disallows combining search+sort; we'll sort server-side then paginate.
     const escaped = queryText.replaceAll('"', "\\\"");
     const candidateLimit = IGDB_MAX_LIMIT_PER_REQUEST;
     const queryLines = [
@@ -260,14 +305,14 @@ export async function fetchIgdbGames({
 
     const nowSeconds = Math.floor(Date.now() / 1000);
     if (mode === "new-releases") {
-      // For New Releases search: only show already-released games (no upcoming).
+      // for new releases search: only show already-released games (no upcoming)
       mainGames = mainGames.filter((g) => {
         const d = Number(g?.first_release_date);
         return Number.isFinite(d) && d > 0 && d <= nowSeconds;
       });
       mainGames.sort((a, b) => Number(b?.first_release_date ?? -1) - Number(a?.first_release_date ?? -1));
     } else if (mode === "top-games") {
-      // For Top Games search: approximate sort by rating then vote count.
+      // for top games search: approximate sort by rating then vote count
       mainGames.sort((a, b) => {
         const br = Number(b?.total_rating ?? b?.aggregated_rating ?? b?.rating ?? -1);
         const ar = Number(a?.total_rating ?? a?.aggregated_rating ?? a?.rating ?? -1);
@@ -278,7 +323,7 @@ export async function fetchIgdbGames({
       });
     }
 
-    // Ensure uniqueness and stable slicing.
+    // ensure uniqueness and stable slicing
     const unique = [];
     const seen = new Set();
     for (const g of mainGames) {
@@ -297,8 +342,8 @@ export async function fetchIgdbGames({
       gamesAll: filtered,
     };
   } else if (mode === "top-games") {
-    // "Top games" should consider both rating and vote count.
-    // We'll approximate IGDB's weighted approach with a larger candidate pool.
+    // "top games" should consider both rating and vote count
+    // we'll approximate igdb's weighted approach with a larger candidate pool
     const candidatePoolLimit = IGDB_MAX_LIMIT_PER_REQUEST;
     const baselineSampleLimit = 500;
     const minVotes = 2000;
@@ -417,6 +462,7 @@ export async function fetchIgdbGames({
   }
 
   cachedResults.set(cacheKey, { cachedAt: Date.now(), payload });
+  pruneResultsCache();
 
   const all = payload?.gamesAll ?? [];
   const pageGames = all.slice(startIndex, startIndex + safePageSize);

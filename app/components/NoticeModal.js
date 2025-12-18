@@ -59,7 +59,7 @@ export default function NoticeModal({ open, title, message, buttonText = "OK", b
               type="button"
               onClick={action}
               disabled={busy}
-              className="cursor-pointer border-2 border-(--border-strong) bg-(--surface) px-3 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition-colors hover:border-white/70 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="cursor-pointer border-2 border-(--border-strong) bg-(--surface-muted) px-3 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-foreground transition-colors hover:bg-(--surface) disabled:cursor-not-allowed disabled:opacity-60"
             >
               {buttonText}
             </button>

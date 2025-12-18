@@ -16,11 +16,13 @@ export const DEFAULT_MATURE_KEYWORDS = [
   "adult",
   "fetish",
   "bdsm",
+  "pervert"
 ];
 
-// mature filter on by default
+// mature filter is on by default across browse + add flows
 
 function normalizeText(value) {
+  // keep it simple: lower-case + collapse whitespace
   return String(value ?? "")
     .toLowerCase()
     .replace(/\s+/g, " ")
@@ -31,7 +33,7 @@ export function containsMatureKeyword(text, keywords = DEFAULT_MATURE_KEYWORDS) 
   const haystack = normalizeText(text);
   if (!haystack) return false;
 
-  // Tokenize so short words like "sex" are less likely to false-match.
+  // tokenize so short words like "sex" are less likely to false-match
   const tokens = new Set(haystack.split(/[^a-z0-9]+/g).filter(Boolean));
 
   for (const raw of keywords ?? []) {

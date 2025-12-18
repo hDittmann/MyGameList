@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 
 import { getFirebaseDb } from "../lib/firebaseClient";
+import { normalizeTheme } from "../lib/themes";
 
 const DEFAULT_SETTINGS = {
   hideMature: true,
   tagFilters: [],
   minRating: 0,
   theme: "dark",
-  font: "default",
 };
 
 export function useUserSettings(user) {
@@ -24,12 +24,15 @@ export function useUserSettings(user) {
   useEffect(() => {
     if (!uid) return;
 
+    // realtime subscription to users/{uid}, so settings changes apply instantly
+
     const db = getFirebaseDb();
     const ref = doc(db, "users", uid);
 
     const unsub = onSnapshot(
       ref,
       (snap) => {
+        // keep this defensive, because the doc can be missing or partially filled
         const data = snap.exists() ? snap.data() : null;
         const nextUsername = typeof data?.username === "string" ? data.username : "";
         const nextSettings = data?.settings ?? {};
@@ -41,12 +44,12 @@ export function useUserSettings(user) {
             hideMature: typeof nextSettings?.hideMature === "boolean" ? nextSettings.hideMature : true,
             tagFilters: Array.isArray(nextSettings?.tagFilters) ? nextSettings.tagFilters.filter(Boolean) : [],
             minRating: Number(nextSettings?.minRating) || 0,
-            theme: nextSettings?.theme === "light" ? "light" : "dark",
-            font: nextSettings?.font === "readable" ? "readable" : "default",
+            theme: normalizeTheme(nextSettings?.theme),
           },
         });
       },
       () => {
+        // if snapshot errors out (network, perms, etc), just fall back to defaults
         setSnapshotState({ uid, username: "", settings: DEFAULT_SETTINGS });
       }
     );

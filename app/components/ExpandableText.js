@@ -23,7 +23,7 @@ export default function ExpandableText({
         <button
           type="button"
           onClick={() => onToggle?.(id, !showFull)}
-          className="cursor-pointer font-semibold text-white/70 underline-offset-4 hover:text-foreground hover:underline"
+          className="cursor-pointer font-semibold text-(--muted) underline-offset-4 hover:text-foreground hover:underline"
         >
           {showFull ? "Show less" : "Read more…"}
         </button>

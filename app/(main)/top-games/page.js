@@ -1,10 +1,18 @@
 "use client";
 
+import { Bebas_Neue } from "next/font/google";
+
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-display",
+});
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFirebaseUser } from "../../hooks/useFirebaseUser";
 import { getFirebaseDb } from "../../lib/firebaseClient";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
 import NoticeModal from "../../components/NoticeModal";
 import ExpandableText from "../../components/ExpandableText";
 import { FilterPill, FilterRange, FilterTextInput } from "../../components/FilterControls";
@@ -20,8 +28,10 @@ function getDisplayVoteCount(game) {
 }
 
 function formatRating(value) {
+  if (value == null) return "—";
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
+  if (n <= 0) return "—";
   return n.toFixed(1);
 }
 
@@ -56,6 +66,7 @@ export default function TopGames() {
   const { user } = useFirebaseUser();
   const { settings } = useUserSettings(user);
   const router = useRouter();
+  const [collectionIds, setCollectionIds] = useState(() => new Set());
 
   const [hideMature, setHideMature] = useState(true);
   const [minRating, setMinRating] = useState(0);
@@ -80,9 +91,42 @@ export default function TopGames() {
     setTagFilters(nextTags);
     setTagFilterText(nextTags.join(", "));
 
-    // Apply settings immediately.
+    // apply settings immediately.
     load({ q: activeQuery, nextPage: 1, nextMinRating: nextMin, nextTagFilters: nextTags, nextHideMature });
   }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!user) {
+      setCollectionIds(new Set());
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchIds() {
+      try {
+        const db = getFirebaseDb();
+        const colRef = collection(db, "users", user.uid, "games");
+        const snap = await getDocs(colRef);
+        if (cancelled) return;
+        setCollectionIds(new Set(snap.docs.map((d) => String(d.id))));
+      } catch {
+        if (!cancelled) setCollectionIds(new Set());
+      }
+    }
+
+    fetchIds();
+
+    function onCollectionChanged() {
+      fetchIds();
+    }
+    window.addEventListener("collection:changed", onCollectionChanged);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("collection:changed", onCollectionChanged);
+    };
+  }, [user]);
 
   const normalizedTagFilters = useMemo(() => {
     return (tagFilters ?? []).map((t) => String(t).trim()).filter(Boolean);
@@ -100,8 +144,12 @@ export default function TopGames() {
         return;
       }
 
+      if (collectionIds.has(String(game?.id))) {
+        setNotice({ title: "Already added", message: "That game is already in your collection." });
+        return;
+      }
+
       try {
-        console.log("handleAdd - current user:", user);
         // show some quick debug info if something's off
         if (user && !user.uid) {
           setNotice({ title: "Auth", message: "Logged in user found but missing uid — check auth state in console." });
@@ -116,6 +164,7 @@ export default function TopGames() {
           first_release_date: game.first_release_date ?? null,
           coverUrl: game.coverUrl ?? null,
           coverImageId: game.coverImageId ?? null,
+          steamUrl: game.steamUrl ?? null,
           addedAt: serverTimestamp(),
         });
         // notify collection component to refresh (fallback for blocked realtime)
@@ -125,7 +174,7 @@ export default function TopGames() {
         setNotice({ title: "Added", message: `${game.name ?? game.title} added to your collection.` });
       } catch (err) {
         console.error("Failed to add game:", err);
-        // Attempt REST fallback write (works without webchannel)
+        // attempt rest fallback write (works without webchannel)
         try {
           const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
           const docId = String(game.id);
@@ -175,7 +224,7 @@ export default function TopGames() {
         }
       }
     },
-    [user, router]
+    [user, router, collectionIds]
   );
 
   async function load({ q, nextPage, nextMinRating, nextTagFilters, nextHideMature }) {
@@ -250,14 +299,13 @@ export default function TopGames() {
       <section className="border-2 border-(--border) bg-(--surface)">
         <div className="border-b-2 border-(--border) px-4 py-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div style={{ width: '87.52px', height: '56px' }}>
-              <h1 className="text-xl" style={{ fontFamily: "var(--font-display)", lineHeight: '56px' }}>
+            <div style={{ width: '100px', height: '56px' }}>
+              <h1 className="text-xl" style={{ fontFamily: bebas.style.fontFamily, lineHeight: '80px' }}>
                 TOP GAMES
               </h1>
             </div>
-
             <form
-              className="flex w-full flex-wrap items-end gap-2 sm:w-auto"
+              className="flex w-full min-w-0 flex-wrap items-end gap-2 sm:w-auto underline"
               onSubmit={(e) => {
                 e.preventDefault();
                 const q = query.trim();
@@ -265,13 +313,31 @@ export default function TopGames() {
                 load({ q, nextPage: 1 });
               }}
             >
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search games"
-                className="w-full border-2 border-(--border) bg-(--surface) px-3 py-2 text-sm text-foreground placeholder:text-(--muted) sm:w-72"
-              />
+              <div className="relative w-full lg:w-72">
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search games"
+                  className="w-full border-2 border-(--border) bg-(--surface) px-3 py-2 pr-9 text-sm text-foreground placeholder:text-(--muted)"
+                />
+                {query ? (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    title="Clear"
+                    disabled={loading}
+                    onClick={() => {
+                      setQuery("");
+                      setActiveQuery("");
+                      load({ q: "", nextPage: 1 });
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-(--muted) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
 
               <div className="min-w-[16rem] flex-1">
                 <div className="flex items-center justify-between gap-3">
@@ -294,7 +360,7 @@ export default function TopGames() {
                 </div>
               </div>
 
-              <div className="min-w-[14rem] flex-1">
+              <div className="min-w-56 flex-1">
                 <div className="text-xs uppercase tracking-[0.35em] text-(--muted)">Tags</div>
                 <input
                   value={tagFilterText}
@@ -316,18 +382,6 @@ export default function TopGames() {
               >
                 Search
               </button>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => {
-                  setQuery("");
-                  setActiveQuery("");
-                  load({ q: "", nextPage: 1 });
-                }}
-                className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-2 text-xs uppercase tracking-[0.35em] text-(--muted) transition-colors hover:bg-(--surface) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Reset
-              </button>
             </form>
           </div>
         </div>
@@ -336,7 +390,7 @@ export default function TopGames() {
           <div className="text-xs uppercase tracking-[0.35em] text-(--muted)">Page {page}</div>
           <div>
             {activeQuery ? (
-              <span className="ml-3 text-xs tracking-[0.15em] text-(--muted)">SEARCH: {activeQuery}</span>
+              <span className="ml-3 text-m tracking-[0.15em] text-(--muted)">SEARCH: {activeQuery}</span>
             ) : null}
           </div>
           <div className="flex items-center gap-2">
@@ -378,7 +432,23 @@ export default function TopGames() {
                   </div>
 
                   <div className="min-w-0">
-                    <div className="truncate text-base font-semibold text-foreground">{g.name}</div>
+                    <div className="text-base font-semibold text-foreground wrap-break-word whitespace-normal">
+                      {g.name}
+                      {g.steamUrl ? (
+                        <a
+                          href={g.steamUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-2 inline-flex align-middle text-(--muted) hover:text-foreground"
+                          title="Open on Steam"
+                          aria-label="Open on Steam"
+                        >
+                          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12c0 4.28 2.69 7.93 6.46 9.36l-2.3-3.33a2.7 2.7 0 0 1 3.1-3.97l2.61 1.09a4.8 4.8 0 1 0 4.22-7.02 4.79 4.79 0 0 0-4.78 4.8c0 .45.06.9.18 1.33l-2.7-1.13a4.24 4.24 0 0 0-1.61-.33c-1.26 0-2.45.55-3.26 1.52L3.3 12.1A8.7 8.7 0 0 1 12 3.3c4.8 0 8.7 3.9 8.7 8.7S16.8 20.7 12 20.7c-1.18 0-2.3-.22-3.33-.65l1.65 2.38c.33.03.67.05 1.01.05 5.52 0 10-4.48 10-10S17.52 2 12 2z" />
+                          </svg>
+                        </a>
+                      ) : null}
+                    </div>
                     <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-(--muted)">
                       <div>
                         <span className="uppercase tracking-[0.35em]">Reviews</span>
@@ -423,7 +493,7 @@ export default function TopGames() {
                               }
                               return (
                                 <div className="grid gap-1">
-                                  <div className="text-foreground leading-snug break-words">{all.join(", ")}</div>
+                                  <div className="text-foreground leading-snug wrap-break-word">{all.join(", ")}</div>
                                   <button
                                     type="button"
                                     onClick={toggle}
@@ -438,7 +508,7 @@ export default function TopGames() {
                             if (!expanded) {
                               return (
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-foreground leading-snug break-words">{matched.join(", ")}</span>
+                                  <span className="text-foreground leading-snug wrap-break-word">{matched.join(", ")}</span>
                                   {hasMore ? (
                                     <button
                                       type="button"
@@ -454,7 +524,7 @@ export default function TopGames() {
 
                             return (
                               <div className="grid gap-1">
-                                <div className="text-foreground leading-snug break-words">{all.join(", ")}</div>
+                                <div className="text-foreground leading-snug wrap-break-word">{all.join(", ")}</div>
                                 <button
                                   type="button"
                                   onClick={toggle}
@@ -478,13 +548,19 @@ export default function TopGames() {
                     />
 
                     <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => handleAdd(g)}
-                        className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-1 text-xs uppercase tracking-[0.35em] text-(--muted)"
-                      >
-                        Add to Collection
-                      </button>
+                      {(() => {
+                        const already = collectionIds.has(String(g?.id));
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleAdd(g)}
+                            disabled={already}
+                            className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-1 text-xs uppercase tracking-[0.35em] text-(--muted) disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {already ? "Added" : "Add to Collection"}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -492,6 +568,28 @@ export default function TopGames() {
             ))}
           </div>
         )}
+
+        <div className="flex items-center justify-between gap-3 border-t border-(--border) px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.35em] text-(--muted)">Page {page}</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={loading || page <= 1}
+              onClick={() => load({ q: activeQuery, nextPage: Math.max(1, page - 1) })}
+              className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-2 text-xs uppercase tracking-[0.35em] text-(--muted) transition-colors hover:bg-(--surface) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              disabled={loading || !hasMore}
+              onClick={() => load({ q: activeQuery, nextPage: page + 1 })}
+              className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-2 text-xs uppercase tracking-[0.35em] text-(--muted) transition-colors hover:bg-(--surface) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </section>
 
       <NoticeModal

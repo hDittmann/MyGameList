@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
 export default function Page() {
-  // Send the site root to the My Collection page
+  // send the site root to the my collection page
   redirect("/my-collection");
 }

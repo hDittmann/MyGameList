@@ -1,15 +1,15 @@
-import { Space_Mono, Bebas_Neue } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const spaceMono = Space_Mono({
+const interBody = Inter({
   subsets: ["latin"],
   variable: "--font-body",
-  weight: ["400", "700"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const bebas = Bebas_Neue({
+const interDisplay = Inter({
   subsets: ["latin"],
-  weight: "400",
+  weight: ["600", "700"],
   variable: "--font-display",
 });
 
@@ -21,7 +21,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${spaceMono.variable} ${bebas.variable} antialiased`}>
+      <body className={`${interBody.variable} ${interDisplay.variable} antialiased`}>
         {children}
       </body>
     </html>

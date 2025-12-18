@@ -4,7 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { FilterPill } from "./FilterControls";
 
+const TAG_UNIVERSE_TTL_MS = 10 * 60_000;
+
+let tagUniverseCache = {
+  fetchedAt: 0,
+  value: null,
+  promise: null,
+};
+
 function normalizeTagList(list) {
+  // trim + dedupe (case-insensitive) so the ui doesn't get noisy
   const out = [];
   const seen = new Set();
   for (const raw of list ?? []) {
@@ -20,6 +29,7 @@ function normalizeTagList(list) {
 }
 
 function mergeTagsByType(a, b) {
+  // merge the standard tag buckets we use across the app
   const types = ["genres", "themes", "modes", "perspectives"];
   const out = {};
   for (const t of types) {
@@ -29,33 +39,54 @@ function mergeTagsByType(a, b) {
 }
 
 async function fetchTagUniverse() {
-  const params = new URLSearchParams({ pageSize: "50", page: "1" });
-  const [topRes, newRes] = await Promise.all([
-    fetch(`/api/igdb/top-games?${params.toString()}`),
-    fetch(`/api/igdb/new-releases?${params.toString()}`),
-  ]);
-
-  const topJson = await topRes.json().catch(() => null);
-  const newJson = await newRes.json().catch(() => null);
-
-  if (!topRes.ok && !newRes.ok) {
-    throw new Error(topJson?.error ?? newJson?.error ?? "Failed to fetch tags");
+  // tiny shared cache so we don't re-fetch tags on every page/modal
+  const now = Date.now();
+  if (tagUniverseCache.value && now - tagUniverseCache.fetchedAt < TAG_UNIVERSE_TTL_MS) {
+    return tagUniverseCache.value;
+  }
+  if (tagUniverseCache.promise) {
+    return tagUniverseCache.promise;
   }
 
-  function extract(payload) {
-    const byType = {};
-    for (const g of payload?.games ?? []) {
-      const t = g?.tagsByType;
-      if (!t) continue;
-      const next = mergeTagsByType(byType, t);
-      Object.assign(byType, next);
+  // grab a decent slice of games from both endpoints, then build a tag universe
+  tagUniverseCache.promise = (async () => {
+    const params = new URLSearchParams({ pageSize: "50", page: "1" });
+    const [topRes, newRes] = await Promise.all([
+      fetch(`/api/igdb/top-games?${params.toString()}`),
+      fetch(`/api/igdb/new-releases?${params.toString()}`),
+    ]);
+
+    const topJson = await topRes.json().catch(() => null);
+    const newJson = await newRes.json().catch(() => null);
+
+    if (!topRes.ok && !newRes.ok) {
+      throw new Error(topJson?.error ?? newJson?.error ?? "Failed to fetch tags");
     }
-    return byType;
-  }
 
-  const topTags = extract(topJson);
-  const newTags = extract(newJson);
-  return mergeTagsByType(topTags, newTags);
+    function extract(payload) {
+      const byType = {};
+      for (const g of payload?.games ?? []) {
+        const t = g?.tagsByType;
+        if (!t) continue;
+        const next = mergeTagsByType(byType, t);
+        Object.assign(byType, next);
+      }
+      return byType;
+    }
+
+    const topTags = extract(topJson);
+    const newTags = extract(newJson);
+    return mergeTagsByType(topTags, newTags);
+  })();
+
+  try {
+    const tags = await tagUniverseCache.promise;
+    tagUniverseCache.value = tags;
+    tagUniverseCache.fetchedAt = Date.now();
+    return tags;
+  } finally {
+    tagUniverseCache.promise = null;
+  }
 }
 
 export default function TagPickerModal({ open, selectedTags, onChange, onClose, availableTagsByType }) {
@@ -64,9 +95,9 @@ export default function TagPickerModal({ open, selectedTags, onChange, onClose, 
   const [fetchedTags, setFetchedTags] = useState(null);
 
   const effectiveTagsByType = useMemo(() => {
-    return availableTagsByType && Object.keys(availableTagsByType).length
-      ? availableTagsByType
-      : fetchedTags;
+    const hasAvailable = availableTagsByType && Object.keys(availableTagsByType).length;
+    if (hasAvailable && fetchedTags) return mergeTagsByType(fetchedTags, availableTagsByType);
+    return hasAvailable ? availableTagsByType : fetchedTags;
   }, [availableTagsByType, fetchedTags]);
 
   const selected = useMemo(() => {
@@ -80,7 +111,11 @@ export default function TagPickerModal({ open, selectedTags, onChange, onClose, 
 
   useEffect(() => {
     if (!open) return;
-    if (availableTagsByType && Object.keys(availableTagsByType).length) return;
+    if (fetchedTags) return;
+
+    // if the parent already gave us a tag universe, don't waste two api calls
+    const hasAvailable = availableTagsByType && Object.keys(availableTagsByType).length;
+    if (hasAvailable) return;
 
     let cancelled = false;
 
@@ -103,7 +138,7 @@ export default function TagPickerModal({ open, selectedTags, onChange, onClose, 
     return () => {
       cancelled = true;
     };
-  }, [open, availableTagsByType]);
+  }, [open, fetchedTags, availableTagsByType]);
 
   const toggle = useCallback(
     (name) => {

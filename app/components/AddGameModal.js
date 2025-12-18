@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, doc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { getFirebaseDb } from "../lib/firebaseClient";
 import { FilterRange } from "./FilterControls";
@@ -17,6 +17,7 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [games, setGames] = useState([]);
+  const [collectionIds, setCollectionIds] = useState(() => new Set());
 
   const [hideMature, setHideMature] = useState(true);
   const [minRating, setMinRating] = useState(0);
@@ -33,6 +34,7 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
   }, [open, onClose]);
 
   async function load({ q, nextPage, append, nextMinRating, nextTagFilters, nextHideMature }) {
+    // fetch a filtered/paginated slice from our server route (keeps igdb creds server-side)
     setLoading(true);
     setError(null);
     try {
@@ -87,7 +89,44 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
     load({ q: "", nextPage: 1, append: false, nextMinRating: nextMin, nextTagFilters: nextTags, nextHideMature });
   }, [open, settings]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Prevent background scroll while modal is open
+  useEffect(() => {
+    if (!open) return;
+    if (!user) {
+      setCollectionIds(new Set());
+      return;
+    }
+
+    // keep a quick set of ids so we can disable "add" for stuff you already own
+
+    let cancelled = false;
+
+    async function fetchIds() {
+      try {
+        const db = getFirebaseDb();
+        const colRef = collection(db, "users", user.uid, "games");
+        const snap = await getDocs(colRef);
+        if (cancelled) return;
+        const next = new Set(snap.docs.map((d) => String(d.id)));
+        setCollectionIds(next);
+      } catch (e) {
+        if (!cancelled) setCollectionIds(new Set());
+      }
+    }
+
+    fetchIds();
+
+    function onCollectionChanged() {
+      fetchIds();
+    }
+    window.addEventListener("collection:changed", onCollectionChanged);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("collection:changed", onCollectionChanged);
+    };
+  }, [open, user]);
+
+  // prevent background scroll while modal is open
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -166,6 +205,11 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
         return;
       }
 
+      if (collectionIds.has(String(game?.id))) {
+        onNotice?.({ title: "Already added", message: "That game is already in your collection." });
+        return;
+      }
+
       try {
         const db = getFirebaseDb();
         const ref = doc(db, "users", user.uid, "games", String(game.id));
@@ -179,6 +223,7 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
             first_release_date: game.first_release_date ?? null,
             coverUrl: game.coverUrl ?? null,
             coverImageId: game.coverImageId ?? null,
+            steamUrl: game.steamUrl ?? null,
             addedAt: serverTimestamp(),
           },
           { merge: true }
@@ -193,7 +238,7 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
         onNotice?.({ title: "Error", message: "Failed to add game (see console)." });
       }
     },
-    [user, onNotice, close]
+    [user, onNotice, close, collectionIds]
   );
 
   if (!open) return null;
@@ -261,7 +306,10 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
                   onClick={() => {
                     setQuery("");
                     setActiveQuery("");
-                    load({ q: "", nextPage: 1, append: false });
+                    setTagFilters([]);
+                    setTagFilterText("");
+                    setTagPickerDraft([]);
+                    load({ q: "", nextPage: 1, append: false, nextTagFilters: [] });
                   }}
                   className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-2 text-xs uppercase tracking-[0.35em] text-(--muted) transition-colors hover:bg-(--surface) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -271,7 +319,7 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
             </form>
 
             <div className="mt-3 flex flex-wrap items-end gap-2">
-              <div className="min-w-[12rem] flex-1">
+              <div className="min-w-48 flex-1">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs uppercase tracking-[0.35em] text-(--muted)">Min rating</div>
                   <div className="text-xs text-(--muted)">{minRatingUi > 0 ? `${minRatingUi}+` : "Any"}</div>
@@ -292,7 +340,7 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
                 </div>
               </div>
 
-              <div className="min-w-[14rem] flex-1">
+              <div className="min-w-56 flex-1">
                 <div className="text-xs uppercase tracking-[0.35em] text-(--muted)">Tags</div>
                 <input
                   value={tagFilterText}
@@ -327,20 +375,41 @@ export default function AddGameModal({ open, user, onClose, onNotice }) {
                       ) : null}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-foreground">{g.name}</div>
+                      <div className="text-sm font-semibold text-foreground wrap-break-word whitespace-normal">
+                        {g.name}
+                        {g.steamUrl ? (
+                          <a
+                            href={g.steamUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-2 inline-flex align-middle text-(--muted) hover:text-foreground"
+                            title="Open on Steam"
+                            aria-label="Open on Steam"
+                          >
+                            <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="currentColor">
+                              <path d="M12 2C6.48 2 2 6.48 2 12c0 4.28 2.69 7.93 6.46 9.36l-2.3-3.33a2.7 2.7 0 0 1 3.1-3.97l2.61 1.09a4.8 4.8 0 1 0 4.22-7.02 4.79 4.79 0 0 0-4.78 4.8c0 .45.06.9.18 1.33l-2.7-1.13a4.24 4.24 0 0 0-1.61-.33c-1.26 0-2.45.55-3.26 1.52L3.3 12.1A8.7 8.7 0 0 1 12 3.3c4.8 0 8.7 3.9 8.7 8.7S16.8 20.7 12 20.7c-1.18 0-2.3-.22-3.33-.65l1.65 2.38c.33.03.67.05 1.01.05 5.52 0 10-4.48 10-10S17.52 2 12 2z" />
+                            </svg>
+                          </a>
+                        ) : null}
+                      </div>
                       <div className="mt-2">
                         <div className="flex items-center justify-between gap-2">
                           <div className="text-xs text-(--muted)">
                             {g.first_release_date ? new Date(g.first_release_date * 1000).toLocaleDateString() : "TBD"}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleAdd(g)}
-                            disabled={!user}
-                            className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-1 text-xs uppercase tracking-[0.35em] text-(--muted) transition-colors hover:bg-(--surface) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Add
-                          </button>
+                          {(() => {
+                            const already = collectionIds.has(String(g?.id));
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleAdd(g)}
+                                disabled={!user || already}
+                                className="cursor-pointer border-2 border-(--border) bg-(--surface-muted) px-3 py-1 text-xs uppercase tracking-[0.35em] text-(--muted) transition-colors hover:bg-(--surface) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {already ? "Added" : "Add"}
+                              </button>
+                            );
+                          })()}
                         </div>
 
                         {renderTagGroups(g)}
