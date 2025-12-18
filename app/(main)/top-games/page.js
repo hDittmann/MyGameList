@@ -305,7 +305,7 @@ export default function TopGames() {
               </h1>
             </div>
             <form
-              className="flex w-full min-w-0 flex-wrap items-end gap-2 sm:w-auto underline"
+              className="flex w-full min-w-0 flex-wrap items-end gap-2 sm:w-auto"
               onSubmit={(e) => {
                 e.preventDefault();
                 const q = query.trim();
