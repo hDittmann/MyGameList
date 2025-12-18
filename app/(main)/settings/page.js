@@ -244,6 +244,11 @@ export default function SettingsPage() {
               </div>
 
               <div className="border-2 border-(--border) bg-(--surface) p-3">
+                <div className="text-xs uppercase tracking-[0.35em] text-(--muted)">Link Steam account</div>
+                <p className="mt-2 text-sm text-(--muted)">Not yet implemented.</p>
+              </div>
+
+              <div className="border-2 border-(--border) bg-(--surface) p-3">
                 <div className="text-xs uppercase tracking-[0.35em] text-(--muted)">Theme</div>
                 <div className="mt-2 max-w-xs">
                   <FilterSelect

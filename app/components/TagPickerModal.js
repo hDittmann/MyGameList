@@ -12,6 +12,16 @@ let tagUniverseCache = {
   promise: null,
 };
 
+function hasAnyTagsByType(tagsByType) {
+  // some callers pass { genres: [], themes: [], ... } even when there are no tags.
+  // treat that as "no tags" so we still fetch a real universe.
+  if (!tagsByType) return false;
+  for (const list of Object.values(tagsByType)) {
+    if (Array.isArray(list) && list.length) return true;
+  }
+  return false;
+}
+
 function normalizeTagList(list) {
   // trim + dedupe (case-insensitive) so the ui doesn't get noisy
   const out = [];
@@ -106,9 +116,9 @@ export default function TagPickerModal({ open, selectedTags, onChange, onClose, 
   }, [open]);
 
   const effectiveTagsByType = useMemo(() => {
-    const hasAvailable = availableTagsByType && Object.keys(availableTagsByType).length;
-    if (hasAvailable && fetchedTags) return mergeTagsByType(fetchedTags, availableTagsByType);
-    return hasAvailable ? availableTagsByType : fetchedTags;
+    const hasAvailable = hasAnyTagsByType(availableTagsByType);
+    if (fetchedTags && hasAvailable) return mergeTagsByType(fetchedTags, availableTagsByType);
+    return fetchedTags ?? (hasAvailable ? availableTagsByType : null);
   }, [availableTagsByType, fetchedTags]);
 
   const selected = useMemo(() => {
@@ -124,9 +134,7 @@ export default function TagPickerModal({ open, selectedTags, onChange, onClose, 
     if (!open) return;
     if (fetchedTags) return;
 
-    // if the parent already gave us a tag universe, don't waste two api calls
-    const hasAvailable = availableTagsByType && Object.keys(availableTagsByType).length;
-    if (hasAvailable) return;
+    // always fetch a stable universe (cached) so searches with 0/1 results still have tags
 
     let cancelled = false;
 

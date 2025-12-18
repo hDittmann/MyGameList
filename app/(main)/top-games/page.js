@@ -18,6 +18,7 @@ import ExpandableText from "../../components/ExpandableText";
 import { FilterPill, FilterRange, FilterTextInput } from "../../components/FilterControls";
 import { useUserSettings } from "../../hooks/useUserSettings";
 import TagPickerModal from "../../components/TagPickerModal";
+import SteamIcon from "../../components/SteamIcon";
 
 function getDisplayRating(game) {
   return game?.total_rating ?? game?.aggregated_rating ?? game?.rating ?? null;
@@ -440,13 +441,11 @@ export default function TopGames() {
                           href={g.steamUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="ml-2 inline-flex align-middle text-(--muted) hover:text-foreground"
+                          className="ml-2 inline-flex items-center text-(--muted) hover:text-foreground"
                           title="Open on Steam"
                           aria-label="Open on Steam"
                         >
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="currentColor">
-                            <path d="M12 2C6.48 2 2 6.48 2 12c0 4.28 2.69 7.93 6.46 9.36l-2.3-3.33a2.7 2.7 0 0 1 3.1-3.97l2.61 1.09a4.8 4.8 0 1 0 4.22-7.02 4.79 4.79 0 0 0-4.78 4.8c0 .45.06.9.18 1.33l-2.7-1.13a4.24 4.24 0 0 0-1.61-.33c-1.26 0-2.45.55-3.26 1.52L3.3 12.1A8.7 8.7 0 0 1 12 3.3c4.8 0 8.7 3.9 8.7 8.7S16.8 20.7 12 20.7c-1.18 0-2.3-.22-3.33-.65l1.65 2.38c.33.03.67.05 1.01.05 5.52 0 10-4.48 10-10S17.52 2 12 2z" />
-                          </svg>
+                          <SteamIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
                         </a>
                       ) : null}
                     </div>
