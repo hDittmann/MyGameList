@@ -1,8 +1,17 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 export default function NoticeModal({ open, title, message, buttonText = "OK", busy, onClose, onAction }) {
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    // focus the modal so enter/escape works even if the input behind it still has focus
+    const id = requestAnimationFrame(() => dialogRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
   const close = useCallback(() => {
     if (busy) return;
     onClose?.();
@@ -18,6 +27,7 @@ export default function NoticeModal({ open, title, message, buttonText = "OK", b
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-hidden={!open}

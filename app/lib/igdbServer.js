@@ -182,6 +182,16 @@ function normalizeGames(games, { coverSize }) {
   });
 }
 
+function escapeIgdbSearch(text) {
+  // keep it boring: apicalypse search uses a quoted string, so escape backslashes/quotes
+  // also normalize newlines so they can't mess with the query
+  return String(text ?? "")
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', "\\\"")
+    .replaceAll(/\r?\n/g, " ")
+    .trim();
+}
+
 function getDisplayRating(game) {
   return game?.weighted_rating ?? game?.total_rating ?? game?.aggregated_rating ?? game?.rating ?? null;
 }
@@ -290,7 +300,7 @@ export async function fetchIgdbGames({
 
   if (queryText) {
     // igdb disallows combining search+sort; we'll sort server-side then paginate.
-    const escaped = queryText.replaceAll('"', "\\\"");
+    const escaped = escapeIgdbSearch(queryText);
     const candidateLimit = IGDB_MAX_LIMIT_PER_REQUEST;
     const queryLines = [
       fieldsLine,

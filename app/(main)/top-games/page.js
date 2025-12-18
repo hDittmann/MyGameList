@@ -43,8 +43,9 @@ function formatReleaseDate(seconds) {
 }
 
 function getDisplayRankedRating(game) {
-  const weighted = Number(game?.weighted_rating);
-  if (Number.isFinite(weighted)) return weighted;
+  const raw = game?.weighted_rating;
+  const weighted = raw == null ? null : Number(raw);
+  if (Number.isFinite(weighted) && weighted > 0) return weighted;
   return getDisplayRating(game);
 }
 

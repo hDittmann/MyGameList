@@ -94,6 +94,17 @@ export default function TagPickerModal({ open, selectedTags, onChange, onClose, 
   const [error, setError] = useState("");
   const [fetchedTags, setFetchedTags] = useState(null);
 
+  useEffect(() => {
+    if (!open) return;
+
+    // lock background scroll while the tag modal is open
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
   const effectiveTagsByType = useMemo(() => {
     const hasAvailable = availableTagsByType && Object.keys(availableTagsByType).length;
     if (hasAvailable && fetchedTags) return mergeTagsByType(fetchedTags, availableTagsByType);
@@ -182,6 +193,9 @@ export default function TagPickerModal({ open, selectedTags, onChange, onClose, 
         }
       }}
       tabIndex={-1}
+      ref={(el) => {
+        if (open && el) el.focus();
+      }}
     >
       <div
         className="flex w-full max-w-3xl max-h-[90vh] flex-col border-2 border-(--border) bg-(--surface)"
